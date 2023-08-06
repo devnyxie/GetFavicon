@@ -10,9 +10,6 @@ import aiohttp
 import asyncio
 import lxml.html
 
-
-
-
 session_sqlite = CachedSession(
     'cache',
     use_cache_dir=True,

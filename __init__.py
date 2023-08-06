@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Response
+from fastapi import FastAPI
 import pydantic
 import requests
 import tldextract
@@ -83,10 +83,9 @@ async def get_favicon_from_sources(url):
     except requests.exceptions.RequestException as e:
         print(f"Error while fetching the page: {e}")
 
-    return None
+    return favicon_links
 
-@app.get("/favicon")
-async def serve_favicon(domain_url: pydantic.HttpUrl):
+async def getFavicon(domain_url: pydantic.HttpUrl):
     domain = tldextract.extract(domain_url)
     used_url = f"http://{domain.fqdn}/"
     links = await get_favicon_from_sources(used_url)

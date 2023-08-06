@@ -1,4 +1,3 @@
-from fastapi import FastAPI
 import pydantic
 import requests
 import tldextract
@@ -11,9 +10,8 @@ import aiohttp
 import asyncio
 import lxml.html
 
-app = FastAPI()
 
-timeout = 2
+
 
 session_sqlite = CachedSession(
     'cache',
@@ -27,6 +25,8 @@ session_sqlite = CachedSession(
     stale_if_error=True,
 )
 requests_cache.install_cache('cache')
+
+timeout = 2
 
 headers = requests.utils.default_headers()
 headers.update(
@@ -85,13 +85,8 @@ async def get_favicon_from_sources(url):
 
     return favicon_links
 
-async def getFavicon(domain_url: pydantic.HttpUrl):
+async def scan(domain_url: pydantic.HttpUrl):
     domain = tldextract.extract(domain_url)
     used_url = f"http://{domain.fqdn}/"
     links = await get_favicon_from_sources(used_url)
     return links
-
-
-@app.get("/")
-def serve_main():
-    return

@@ -23,6 +23,12 @@ async def serve_main(domain_url: HttpUrl):
     return favicons = scan_async(domain_url)
 ```
 
+You can specify a timeout duration (in seconds) for both the scanner and scanner_async functions, with the default timeout set to **2 seconds**.
+
+```
+favicons = scan_async('https://www.google.com', timeout = 3)
+```
+
 #### Response example (fastapi + getFavicon):
 
 <img src="https://i.imgur.com/JuWLbsd.png"/>

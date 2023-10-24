@@ -2,12 +2,17 @@ import pydantic
 import requests
 import tldextract
 from urllib.parse import urljoin
-from .helpers import detect_image_format_and_size
+from .helpers import detect_image_format_and_size, prepare_response
 import aiohttp
 import asyncio
 import lxml.html
 import timeout_decorator
 import requests
+
+
+from lxml import html
+
+
 headers = requests.utils.default_headers()
 headers.update(
     {
@@ -19,40 +24,42 @@ headers.update(
     }
 )
 
-async def async_get_favicon_from_sources(session, url, timeout, first_only):
+#################
+####  ASYNC  ####
+#################
+
+async def async_get_favicon_from_sources(session, url):
     favicon_links = []
     tasks = []
-
     try:
-        async with session.get(url, timeout=timeout) as res:
+        async with session.get(url) as res:
             content = await res.text()
             html = lxml.html.fromstring(content)
-
             async def find_in_html_and_make_request(path):
                 links = html.xpath(path)
-                for link in links:
-                    href = link.get('href')
-                    if href:
-                        task = async_get_favicon_from_url(session, url, href)
-                        tasks.append(task)
-
+                if links:
+                    for link in links:
+                        # href = link.get('href')
+                        href = link
+                        if href:
+                            task = async_get_favicon_from_url(session, url, href)
+                            tasks.append(task)
             sources = [
-                '//link[@rel="icon" or @rel="shortcut icon"]',
-                '//meta[@name="msapplication-TileImage"]',
-                '//link[@rel="apple-touch-icon"]',
-                '//link[@rel="mask-icon"]'
+                #     '//link[@rel="icon" or @rel="shortcut icon"]',
+                #     '//meta[@name="msapplication-TileImage"]',
+                #     '//link[@rel="apple-touch-icon"]',
+                #     '//link[@rel="mask-icon"]'
+                '//link[@rel="icon" or @rel="shortcut icon"]/@href',
+                '//meta[@name="msapplication-TileImage"]/@content',
+                '//link[@rel="apple-touch-icon"]/@href',
+                '//link[@rel="mask-icon"]/@href'
             ]
-
             for source in sources:
-                if first_only and favicon_links:
-                    return favicon_links
                 await find_in_html_and_make_request(source)
-
             tasks.append(check_favicon_ico(session, url))
-
             if tasks:
-                    results = await asyncio.gather(*tasks)
-                    favicon_links.extend([result for result in results if result is not None])
+                results = await asyncio.gather(*tasks)
+                favicon_links.extend([result for result in results if result is not None])
             return favicon_links
     except requests.exceptions.RequestException as e:
         print(f"Error while fetching the page: {e}")
@@ -63,8 +70,6 @@ async def check_favicon_ico(session, url):
         format, width, height = detect_image_format_and_size(await res.read())
         if format:
             return {"format": format.lower(), "width": width, "height": height, "url": urljoin(url, 'favicon.ico')}
-
-
 
 async def async_get_favicon_from_url(session, base_url, href):
     try:
@@ -78,33 +83,34 @@ async def async_get_favicon_from_url(session, base_url, href):
         print(f"Error while fetching favicon from URL: {e}")
         return None
 
-async def scan_async(domain_url: pydantic.HttpUrl, timeout=2, first_only = False):
+async def scan_async(domain_url: pydantic.HttpUrl, timeout=4, size = None, all='true'):
     try:
-        async with aiohttp.ClientSession(headers=headers) as session:
+        # async with aiohttp.ClientSession(headers=headers) as session:
+        async with aiohttp.ClientSession() as session:
             domain = tldextract.extract(domain_url)
             protocol = 'https://' if domain_url.startswith('https://') else 'http://'
             used_url = f"{protocol}{domain.fqdn}/"
-            async_get_favicon_task = async_get_favicon_from_sources(session, used_url, timeout, first_only)
+            async_get_favicon_task = async_get_favicon_from_sources(session, used_url)
             result = await asyncio.wait_for(async_get_favicon_task, timeout=timeout)
-            return result
+            return_data = prepare_response(result, size, all)
+            return return_data
     except asyncio.TimeoutError:
-        print("Timeout occurred in scan_async")
-        return None
+        return {"response": "The designated time limit was exceeded.", "status": 500}
     except Exception as e:
-        print(f"Error in scan_async: {e}")
-        return None
+        return {"response": f"Error in scan_async: {e}", "status": 500}
 
 
+################
+####  SYNC  ####
+################
 
-def sync_get_favicon_from_sources(url, timeout, first_only):
+def sync_get_favicon_from_sources(url):
     favicon_links = []
     try:
-        # used_url = f"http://{tldextract.extract(url).fqdn}/"
-        response = requests.get(url, headers=headers, timeout=timeout)
+        response = requests.get(url, headers=headers)
         response.raise_for_status()
         content = response.text
         html = lxml.html.fromstring(content)
-
         def find_in_html_and_make_request(path):
             links = html.xpath(path)
             for link in links:
@@ -114,46 +120,34 @@ def sync_get_favicon_from_sources(url, timeout, first_only):
                     format, width, height = detect_image_format_and_size(response.content)
                     if format:
                         favicon_links.append({"format": format.lower(), "width": width, "height": height, "url": urljoin(url, href)})
-                        if first_only:
-                            return favicon_links
-                else:
-                    if first_only:
-                        return favicon_links
-            response = requests.get(urljoin(url, 'favicon.ico'))
-            format, width, height = detect_image_format_and_size(response.content)
-            if format:
-                favicon_links.append({"format": format.lower(), "width": width, "height": height, "url": urljoin(url, 'favicon.ico')})
-            return favicon_links
         sources = [
             '//link[@rel="icon" or @rel="shortcut icon"]',
             '//meta[@name="msapplication-TileImage"]',
-            '//link[@rel="apple-touch-icon"]'
+            '//link[@rel="apple-touch-icon"]',
             '//link[@rel="mask-icon"]'
         ]
         for source in sources:
-            if first_only and favicon_links:
-                return favicon_links
             find_in_html_and_make_request(source)
+        response = requests.get(urljoin(url, 'favicon.ico'))
+        format, width, height = detect_image_format_and_size(response.content)
+        if format:
+            favicon_links.append({"format": format.lower(), "width": width, "height": height, "url": urljoin(url, 'favicon.ico')})
         return favicon_links
     except requests.exceptions.RequestException as e:
         print(f"Error while fetching the page: {e}")
         return favicon_links
 
-def scan(domain_url: pydantic.HttpUrl, timeout = 2, first_only = False):
-    @timeout_decorator.timeout(timeout)
+def scan(domain_url: pydantic.HttpUrl, timeout=4, size = None, all='true'):
+    #By default, timeout-decorator uses signals to limit the execution time of the given function. This appoach does not work if your function is executed not in a main thread (for example if it’s a worker thread of the web application).
+    @timeout_decorator.timeout(timeout, use_signals=False)
     def inner_timeout():
-        try:
             domain = tldextract.extract(domain_url)
             protocol = 'https://' if domain_url.startswith('https://') else 'http://'
             used_url = f"{protocol}{domain.fqdn}/"
-            links = sync_get_favicon_from_sources(used_url, timeout, first_only)
-            return links
-        except Exception as e:
-            print(f"Error in scan: {e}")
-            return None
-
+            result = sync_get_favicon_from_sources(used_url)
+            return_data = prepare_response(result, size, all)
+            return return_data
     try:
         return inner_timeout()
     except Exception as e:
-        print(f"Error in scan outer: {e}")
-        return None
+        return {"response": f"Error in scan: {e}", "status": 500}

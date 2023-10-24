@@ -6,7 +6,7 @@ with open('README.md', 'r') as f:
 
 setup(
     name='getFavicon',
-    version='0.6.1',
+    version='0.6.3',
     author='Tim Afanasiev',
     author_email='timbusinez@gmail.com',
     description='A Python library to fetch favicons from URLs',
@@ -23,7 +23,6 @@ setup(
         'lxml==4.9.3',
         'timeout-decorator==0.5.0',
         'lxml==4.9.3',
-        'timeout-decorator==0.5.0'
     ],
     classifiers=[
         'Programming Language :: Python :: 3.1',

@@ -52,3 +52,5 @@ favicons = scan('https://www.google.com', first_only = True)
 ### Response example
 
 <img src="https://i.imgur.com/xAtm6pU.png"/>
+
+test

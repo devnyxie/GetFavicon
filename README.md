@@ -56,3 +56,4 @@ favicons = scan('https://www.google.com', first_only = True)
 test
 test
 test
+test
